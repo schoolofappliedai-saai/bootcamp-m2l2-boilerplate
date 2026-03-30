@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}SAAI | Minimal AI Agent with Flask{% endblock %}</title>
+    <meta
+        name="description"
+        content="A SAAI learning project that demonstrates how to build a minimal AI agent with Flask, Ollama, and a simple callable tool."
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+
+    <style>
+        :root {
+            --saai-navy: #0B1E40;
+            --saai-teal: #2EB4A7;
+            --saai-ink: #0f172a;
+            --saai-mist: #f1f5f9;
+            --saai-white: #ffffff;
+            --saai-border: #dbe4ee;
+            --saai-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%);
+            color: var(--saai-ink);
+        }
+
+        .site-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            background: var(--saai-white);
+            border-bottom: 1px solid var(--saai-border);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .topbar-inner,
+        .hero-inner,
+        .content-shell,
+        .footer-inner {
+            width: min(1100px, calc(100% - 2rem));
+            margin: 0 auto;
+        }
+
+        .topbar-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .brand-mark {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--saai-navy), var(--saai-teal));
+            color: white;
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            box-shadow: 0 10px 24px rgba(11, 30, 64, 0.18);
+        }
+
+        .brand-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .brand-copy .eyebrow {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--saai-teal);
+        }
+
+        .brand-copy .title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--saai-navy);
+        }
+
+        .brand-copy .subtitle {
+            font-size: 0.88rem;
+            color: var(--saai-muted);
+        }
+
+        .topbar-note {
+            font-size: 0.9rem;
+            color: var(--saai-muted);
+            text-align: right;
+            max-width: 420px;
+        }
+
+        .hero {
+            padding: 2.5rem 0 1.5rem;
+        }
+
+        .hero-card {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid var(--saai-border);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+        }
+
+        .hero-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(46, 180, 167, 0.1);
+            color: #0f766e;
+            border: 1px solid rgba(46, 180, 167, 0.22);
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 {
+            margin: 0 0 0.8rem;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1.1;
+            color: var(--saai-navy);
+        }
+
+        .hero p {
+            margin: 0;
+            max-width: 760px;
+            font-size: 1rem;
+            line-height: 1.7;
+            color: #334155;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .hero-stat {
+            background: var(--saai-mist);
+            border: 1px solid var(--saai-border);
+            border-radius: 18px;
+            padding: 1rem;
+        }
+
+        .hero-stat h3 {
+            margin: 0 0 0.35rem;
+            font-size: 0.95rem;
+            color: var(--saai-navy);
+        }
+
+        .hero-stat p {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            color: var(--saai-muted);
+        }
+
+        .content-shell {
+            flex: 1;
+            padding-bottom: 2rem;
+        }
+
+        .page-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--saai-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+        }
+
+        .footer {
+            border-top: 1px solid var(--saai-border);
+            background: #ffffff;
+            margin-top: auto;
+        }
+
+        .footer-inner {
+            padding: 1rem 0 1.4rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-copy {
+            font-size: 0.9rem;
+            color: var(--saai-muted);
+        }
+
+        .footer-copy strong {
+            color: var(--saai-navy);
+        }
+
+        @media (max-width: 820px) {
+            .topbar-inner,
+            .footer-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .topbar-note {
+                text-align: left;
+            }
+
+            .hero-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-card,
+            .page-panel {
+                padding: 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="site-shell">
+        <header class="topbar">
+            <div class="topbar-inner">
+                <a href="#" class="brand">
+                    <div class="brand-mark">SAAI</div>
+                    <div class="brand-copy">
+                        <span class="eyebrow">School of Applied Artificial Intelligence</span>
+                        <span class="title">Minimal AI Agent with Flask</span>
+                        <span class="subtitle">Applied AI learning project under the SAAI framework</span>
+                    </div>
+                </a>
+
+                <div class="topbar-note">
+                    A student-facing build that demonstrates how a Flask web app becomes an AI agent by combining an LLM with one callable tool.
+                </div>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="hero-inner">
+                <div class="hero-card">
+                    <div class="hero-label">SAAI Project • Design → Develop → Deploy → Defend</div>
+                    <h1>Build a Minimal AI Agent, not just a chatbot.</h1>
+                    <p>
+                        This project teaches students how to use <strong>Flask</strong> to create a simple web interface,
+                        connect it to an <strong>LLM through Ollama</strong>, and add one minimal tool in Python.
+                        The result is a working beginner-friendly AI agent that keeps the model’s general intelligence
+                        while also performing a specific action when prompted correctly.
+                    </p>
+
+                    <div class="hero-grid">
+                        <div class="hero-stat">
+                            <h3>What this project is</h3>
+                            <p>
+                                A one-page Flask chatbot app with local LLM integration and a dictionary lookup tool.
+                            </p>
+                        </div>
+                        <div class="hero-stat">
+                            <h3>What students learn</h3>
+                            <p>
+                                How tool use makes an app agentic: user input, intent detection, function call, and natural response.
+                            </p>
+                        </div>
+                        <div class="hero-stat">
+                            <h3>Why it matters</h3>
+                            <p>
+                                It is the first practical step from basic web development into applied AI product engineering.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="content-shell">
+            <div class="page-panel">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div class="footer-inner">
+                <div class="footer-copy">
+                    <strong>SAAI</strong> — School of Applied Artificial Intelligence
+                </div>
+                <div class="footer-copy">
+                    Minimal AI Agent with Flask • A teaching project for beginner AI product builders
+                </div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
