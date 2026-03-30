@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, session, jsonify
-import requests
+from openai import OpenAI
 import os
 import re
 from dotenv import load_dotenv
@@ -9,18 +9,32 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-me")
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:1b")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "90"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "90"))
 
-# Keep the dictionary tool inside app.py for teaching clarity
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Kept the dictionary tool inside app.py for teaching clarity
 DICTIONARY = {
     "python": "A high-level programming language known for its simplicity and readability.",
     "flask": "A lightweight web framework for Python.",
     "api": "Application Programming Interface, a set of rules for accessing a software application.",
     "llm": "Large Language Model, an AI model trained on vast amounts of text data.",
     "agent": "An AI system that can perform tasks autonomously using tools.",
-    "ollama": "A tool for running large language models locally."
+    "ollama": "A tool for running large language models locally.",
+    "openai": "A platform and API for using large language models in applications."
+}
+
+# Records tool: dictionary of dictionaries
+RECORDS = {
+    "aaditya": {"name": "Aaditya Jain", "age": 25, "city": "New York"},
+    "aabhas": {"name": "Aabhas Jaiswal", "age": 22, "city": "Los Angeles"},
+    "anmol": {"name": "Anmol Shakya", "age": 24, "city": "Chicago"},
+    "lucky": {"name": "Lucky Shivhare", "age": 26, "city": "Houston"},
+    "aadya": {"name": "Aadya Singh", "age": 23, "city": "Phoenix"},
+    "jairaj": {"name": "Jairaj Singh Rathore", "age": 27, "city": "Philadelphia"},
+    "kavyansh": {"name": "Kavyansh Singh Rajput", "age": 24, "city": "San Francisco"},
 }
 
 
@@ -89,9 +103,60 @@ def get_dictionary_value(key: str) -> str | None:
     return DICTIONARY.get(normalize_text(key))
 
 
+def find_record_person(user_message: str) -> str | None:
+    """
+    Try to find which person from RECORDS is being mentioned.
+    Returns the canonical RECORDS key if found.
+    """
+    normalized_message = normalize_text(user_message)
+
+    for person_key, details in RECORDS.items():
+        # Match the short key like "aaditya"
+        if re.search(rf"\b{re.escape(normalize_text(person_key))}\b", normalized_message):
+            return person_key
+
+        # Match the full name like "Aaditya Jain"
+        full_name = details.get("name")
+        if full_name and normalize_text(full_name) in normalized_message:
+            return person_key
+
+    return None
+
+
+def extract_record_field(user_message: str) -> str | None:
+    """
+    Detect which field about the person is being asked.
+    """
+    normalized_message = normalize_text(user_message)
+
+    field_aliases = {
+        "name": ["name", "full name"],
+        "age": ["age", "old"],
+        "city": ["city", "live", "lives", "from", "location"],
+    }
+
+    for field, aliases in field_aliases.items():
+        for alias in aliases:
+            if re.search(rf"\b{re.escape(alias)}\b", normalized_message):
+                return field
+
+    return None
+
+
+def get_record_detail(person_key: str, field: str):
+    """
+    Return a particular field for a person from RECORDS.
+    """
+    person_data = RECORDS.get(person_key)
+    if not person_data:
+        return None
+
+    return person_data.get(field)
+
+
 def build_messages(user_message: str, tool_context: str | None, history: list[dict]) -> list[dict]:
     """
-    Build the message list for Ollama.
+    Build the message list for OpenAI.
     Keeps the model's general intelligence, but injects tool context when relevant.
     """
     system_prompt = (
@@ -99,7 +164,8 @@ def build_messages(user_message: str, tool_context: str | None, history: list[di
         "Keep responses concise, clear, and student-friendly. "
         "You retain your normal general intelligence for general questions. "
         "When tool context is provided, use it accurately and mention it clearly. "
-        "If a dictionary key is missing, say so clearly and do not invent a value."
+        "If a dictionary key is missing, say so clearly and do not invent a value. "
+        "If a person record is found, use only the provided record data and do not invent missing details."
     )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -126,44 +192,57 @@ def build_messages(user_message: str, tool_context: str | None, history: list[di
     return messages
 
 
-def call_ollama(messages: list[dict]) -> str:
+def call_openai(messages: list[dict]) -> str:
     """
-    Call Ollama's local chat API.
+    Call OpenAI Responses API.
     Raises an exception if the call fails.
     """
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": False,
-    }
+    response = client.responses.create(
+        model=OPENAI_MODEL,
+        input=messages,
+        timeout=OPENAI_TIMEOUT,
+    )
 
-    response = requests.post(OLLAMA_URL, json=payload, timeout=OLLAMA_TIMEOUT)
-    response.raise_for_status()
-
-    data = response.json()
-    return data["message"]["content"].strip()
+    return response.output_text.strip()
 
 
 def generate_agent_reply(user_message: str, history: list[dict]) -> str:
     """
     Core agent logic:
-    - Detect tool intent
-    - If tool intent exists, look up the dictionary value
-    - Pass tool context to the LLM
-    - Otherwise, use the LLM normally
+    1. Detect dictionary lookup intent
+    2. Detect person/record lookup intent
+    3. Use OpenAI normally for all other prompts
     """
-    key = extract_lookup_key(user_message)
-    tool_context = None
 
+    # --- Dictionary lookup ---
+    key = extract_lookup_key(user_message)
     if key is not None:
         value = get_dictionary_value(key)
         if value:
-            tool_context = f"Dictionary tool result for key '{key}': {value}"
-        else:
-            tool_context = f"Dictionary tool result: no value found for key '{key}'."
+            return f"The dictionary value for '{key}' is: {value}"
+        return f"No dictionary value found for key '{key}'."
 
-    messages = build_messages(user_message, tool_context, history)
-    return call_ollama(messages)
+    # --- Records lookup ---
+    person_key = find_record_person(user_message)
+    field = extract_record_field(user_message)
+
+    if person_key and field:
+        value = get_record_detail(person_key, field)
+        full_name = RECORDS[person_key].get("name", person_key)
+
+        if value is not None:
+            return f"{full_name}'s {field} is {value}."
+        return f"I found {full_name}, but I could not find the field '{field}'."
+
+    if person_key and not field:
+        person_data = RECORDS.get(person_key, {})
+        available_fields = ", ".join(person_data.keys())
+        full_name = person_data.get("name", person_key)
+        return f"I found {full_name}. Available details are: {available_fields}."
+
+    # --- General AI fallback ---
+    messages = build_messages(user_message, None, history)
+    return call_openai(messages)
 
 
 @app.route("/")
@@ -172,7 +251,7 @@ def index():
     return render_template(
         "index.html",
         history=history,
-        model_name=OLLAMA_MODEL,
+        model_name=OPENAI_MODEL,
     )
 
 
@@ -191,16 +270,12 @@ def chat():
     try:
         # Pass prior history only, not the just-added user message again
         reply = generate_agent_reply(user_message, history[:-1])
-    except requests.exceptions.RequestException as exc:
+    except Exception as exc:
         reply = (
-            "I could not reach the local Ollama model. "
-            "Please make sure Ollama is running and the selected model is available.\n\n"
+            "I could not reach the OpenAI API. "
+            "Please make sure your OPENAI_API_KEY is set correctly and your internet connection is working.\n\n"
             f"Technical detail: {exc}"
         )
-    except KeyError:
-        reply = "The response from Ollama did not match the expected format."
-    except Exception as exc:
-        reply = f"Something went wrong while generating the response: {exc}"
 
     history.append({"role": "assistant", "content": reply})
 
