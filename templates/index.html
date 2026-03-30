@@ -1,0 +1,601 @@
+{% extends "base.html" %}
+
+{% block title %}SAAI | Minimal AI Agent with Flask{% endblock %}
+
+{% block content %}
+<style>
+    .agent-shell {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .hero-strip {
+        display: grid;
+        grid-template-columns: 1.3fr 0.9fr;
+        gap: 1.25rem;
+        align-items: stretch;
+    }
+
+    .hero-panel,
+    .side-panel,
+    .chat-panel {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        border: 1px solid #dbe4ee;
+        border-radius: 24px;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+    }
+
+    .hero-panel {
+        padding: 1.5rem;
+    }
+
+    .side-panel {
+        padding: 1.25rem;
+    }
+
+    .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.45rem 0.8rem;
+        border-radius: 999px;
+        background: rgba(46, 180, 167, 0.1);
+        color: #0f766e;
+        border: 1px solid rgba(46, 180, 167, 0.2);
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-bottom: 0.9rem;
+    }
+
+    .hero-title {
+        margin: 0 0 0.7rem;
+        font-size: clamp(1.8rem, 3vw, 2.5rem);
+        line-height: 1.1;
+        color: #0B1E40;
+    }
+
+    .hero-copy {
+        margin: 0;
+        color: #475569;
+        line-height: 1.7;
+        font-size: 1rem;
+    }
+
+    .micro-grid {
+        margin-top: 1.25rem;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+    }
+
+    .micro-card {
+        background: #f8fbff;
+        border: 1px solid #dbe4ee;
+        border-radius: 18px;
+        padding: 0.95rem;
+    }
+
+    .micro-card h3 {
+        margin: 0 0 0.35rem;
+        font-size: 0.92rem;
+        color: #0B1E40;
+    }
+
+    .micro-card p {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.9rem;
+        line-height: 1.55;
+    }
+
+    .side-panel h3 {
+        margin: 0 0 0.8rem;
+        color: #0B1E40;
+        font-size: 1.05rem;
+    }
+
+    .status-note,
+    .slow-note {
+        border-radius: 18px;
+        padding: 0.95rem 1rem;
+        font-size: 0.93rem;
+        line-height: 1.6;
+    }
+
+    .status-note {
+        background: #f8fbff;
+        border: 1px solid #dbe4ee;
+        color: #475569;
+        margin-bottom: 0.9rem;
+    }
+
+    .slow-note {
+        background: rgba(255, 247, 237, 0.95);
+        border: 1px solid rgba(251, 146, 60, 0.25);
+        color: #9a3412;
+    }
+
+    .chat-panel {
+        padding: 1.25rem;
+    }
+
+    .chat-topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .chat-topbar h2 {
+        margin: 0 0 0.35rem;
+        color: #0B1E40;
+        font-size: 1.2rem;
+    }
+
+    .chat-topbar p {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.94rem;
+    }
+
+    .clear-btn {
+        border: 1px solid #dbe4ee;
+        background: white;
+        color: #0B1E40;
+        border-radius: 14px;
+        padding: 0.8rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .clear-btn:hover {
+        background: #f8fbff;
+        transform: translateY(-1px);
+    }
+
+    .prompt-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-bottom: 1rem;
+    }
+
+    .prompt-chip {
+        border: 1px solid #dbe4ee;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        color: #0B1E40;
+        border-radius: 999px;
+        padding: 0.65rem 0.9rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s ease;
+    }
+
+    .prompt-chip:hover {
+        border-color: #2EB4A7;
+        color: #0f766e;
+        transform: translateY(-1px);
+    }
+
+    .chat-history {
+        min-height: 360px;
+        max-height: 560px;
+        overflow-y: auto;
+        padding: 1rem;
+        border-radius: 20px;
+        background:
+            radial-gradient(circle at top right, rgba(46, 180, 167, 0.08), transparent 28%),
+            linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+        border: 1px solid #dbe4ee;
+        display: flex;
+        flex-direction: column;
+        gap: 0.95rem;
+    }
+
+    .empty-state {
+        margin: auto;
+        text-align: center;
+        max-width: 620px;
+        color: #64748b;
+    }
+
+    .empty-state h3 {
+        margin: 0 0 0.5rem;
+        color: #0B1E40;
+        font-size: 1.15rem;
+    }
+
+    .empty-state p {
+        margin: 0;
+        line-height: 1.7;
+    }
+
+    .message-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .message-row.user {
+        align-items: flex-end;
+    }
+
+    .message-row.assistant {
+        align-items: flex-start;
+    }
+
+    .message-meta {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #64748b;
+        padding: 0 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .message-bubble {
+        max-width: min(78ch, 85%);
+        border-radius: 20px;
+        padding: 0.95rem 1rem;
+        line-height: 1.65;
+        font-size: 0.96rem;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    }
+
+    .message-row.user .message-bubble {
+        background: linear-gradient(135deg, #0B1E40, #183667);
+        color: white;
+        border-bottom-right-radius: 8px;
+    }
+
+    .message-row.assistant .message-bubble {
+        background: white;
+        border: 1px solid #dbe4ee;
+        color: #0f172a;
+        border-bottom-left-radius: 8px;
+    }
+
+    .typing-row {
+        display: none;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.8rem 0.2rem 0;
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+
+    .typing-row.active {
+        display: flex;
+    }
+
+    .typing-dots {
+        display: inline-flex;
+        gap: 0.28rem;
+        align-items: center;
+    }
+
+    .typing-dots span {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #2EB4A7;
+        animation: bounce 1.2s infinite ease-in-out;
+        opacity: 0.75;
+    }
+
+    .typing-dots span:nth-child(2) {
+        animation-delay: 0.15s;
+    }
+
+    .typing-dots span:nth-child(3) {
+        animation-delay: 0.3s;
+    }
+
+    @keyframes bounce {
+        0%, 80%, 100% { transform: scale(0.75); opacity: 0.45; }
+        40% { transform: scale(1); opacity: 1; }
+    }
+
+    .composer {
+        margin-top: 1rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.85rem;
+        align-items: center;
+    }
+
+    .composer-field {
+        position: relative;
+    }
+
+    .composer input {
+        width: 100%;
+        border: 1px solid #dbe4ee;
+        background: white;
+        color: #0f172a;
+        border-radius: 18px;
+        padding: 1rem 1rem;
+        font-size: 1rem;
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+
+    .composer input:focus {
+        outline: none;
+        border-color: #2EB4A7;
+        box-shadow: 0 0 0 4px rgba(46, 180, 167, 0.12);
+    }
+
+    .send-btn {
+        border: none;
+        background: linear-gradient(135deg, #0B1E40, #2EB4A7);
+        color: white;
+        border-radius: 18px;
+        padding: 1rem 1.2rem;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 14px 28px rgba(11, 30, 64, 0.18);
+        transition: 0.2s ease;
+    }
+
+    .send-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .send-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .composer-help {
+        margin-top: 0.75rem;
+        color: #64748b;
+        font-size: 0.88rem;
+        line-height: 1.55;
+    }
+
+    @media (max-width: 920px) {
+        .hero-strip {
+            grid-template-columns: 1fr;
+        }
+
+        .micro-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .chat-topbar {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .composer {
+            grid-template-columns: 1fr;
+        }
+
+        .send-btn,
+        .clear-btn {
+            width: 100%;
+        }
+
+        .message-bubble {
+            max-width: 100%;
+        }
+    }
+</style>
+
+<div class="agent-shell">
+    <section class="hero-strip">
+        <div class="hero-panel">
+            <div class="eyebrow">SAAI Lab Build • Flask + Ollama + Tool Use</div>
+            <h1 class="hero-title">Minimal AI Agent Playground</h1>
+            <p class="hero-copy">
+                This project demonstrates how a simple Flask app becomes a minimal AI agent.
+                The system keeps the LLM’s general intelligence for normal prompts, but it can
+                also trigger a small built-in tool when you ask it to look up a key.
+            </p>
+
+            <div class="micro-grid">
+                <div class="micro-card">
+                    <h3>General Intelligence</h3>
+                    <p>Ask normal questions like “What is Flask?” and the model responds like a regular chatbot.</p>
+                </div>
+                <div class="micro-card">
+                    <h3>Tool Use</h3>
+                    <p>Use prompts like <strong>lookup flask</strong> to trigger the app’s dictionary tool.</p>
+                </div>
+                <div class="micro-card">
+                    <h3>Agentic Behavior</h3>
+                    <p>The app detects intent, calls a function, and brings the result back into the final answer.</p>
+                </div>
+            </div>
+        </div>
+
+        <aside class="side-panel">
+            <h3>Before you test</h3>
+            <div class="status-note">
+                This is a local AI system using Flask and a free LLM setup. Responses are generated live, not pre-written.
+            </div>
+            <div class="slow-note">
+                <strong>Please wait after sending a message.</strong> The system may be a bit slow, especially on the first prompt or on lighter hardware. Give it up to a minute before the response appears.
+            </div>
+        </aside>
+    </section>
+
+    <section class="chat-panel">
+        <div class="chat-topbar">
+            <div>
+                <h2>Chat with the Agent</h2>
+                <p>Try a normal prompt, or use a lookup command to trigger the built-in tool.</p>
+            </div>
+            <button id="clear-btn" type="button" class="clear-btn">Clear Chat</button>
+        </div>
+
+        <div class="prompt-row">
+            <button type="button" class="prompt-chip" data-prompt="What is Flask?">What is Flask?</button>
+            <button type="button" class="prompt-chip" data-prompt="lookup python">lookup python</button>
+            <button type="button" class="prompt-chip" data-prompt="find key llm">find key llm</button>
+            <button type="button" class="prompt-chip" data-prompt="get value for api">get value for api</button>
+            <button type="button" class="prompt-chip" data-prompt="lookup django">lookup django</button>
+        </div>
+
+        <div id="chat-history" class="chat-history">
+            {% if history and history|length > 0 %}
+                {% for msg in history %}
+                    <div class="message-row {{ msg.role }}">
+                        <div class="message-meta">
+                            {% if msg.role == "user" %}You{% else %}Agent{% endif %}
+                        </div>
+                        <div class="message-bubble">{{ msg.content }}</div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <h3>Your minimal AI agent is ready.</h3>
+                    <p>
+                        Start with a normal prompt like <strong>What is Flask?</strong>, or test the tool with
+                        <strong>lookup python</strong>. The purpose of this demo is to show the difference between
+                        plain chat and tool-augmented agent behavior.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div id="typing-row" class="typing-row">
+            <div class="typing-dots" aria-hidden="true">
+                <span></span><span></span><span></span>
+            </div>
+            <div>The agent is working on your request. Please wait a bit for the response.</div>
+        </div>
+
+        <form id="chat-form" class="composer">
+            <div class="composer-field">
+                <input
+                    type="text"
+                    id="message"
+                    name="message"
+                    placeholder="Ask something, or type: lookup flask"
+                    autocomplete="off"
+                    required
+                />
+            </div>
+            <button type="submit" id="send-btn" class="send-btn">Send Message</button>
+        </form>
+
+        <div class="composer-help">
+            Tip: tool-style prompts include <strong>lookup &lt;key&gt;</strong>,
+            <strong>find key &lt;key&gt;</strong>, and <strong>get value for &lt;key&gt;</strong>.
+        </div>
+    </section>
+</div>
+
+<script>
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message');
+    const sendBtn = document.getElementById('send-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const chatHistory = document.getElementById('chat-history');
+    const typingRow = document.getElementById('typing-row');
+    const promptChips = document.querySelectorAll('.prompt-chip');
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function appendMessage(role, content) {
+        const emptyState = chatHistory.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-row ${role}`;
+
+        const meta = document.createElement('div');
+        meta.className = 'message-meta';
+        meta.textContent = role === 'user' ? 'You' : 'Agent';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
+
+        wrapper.appendChild(meta);
+        wrapper.appendChild(bubble);
+        chatHistory.appendChild(wrapper);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function setLoading(isLoading) {
+        sendBtn.disabled = isLoading;
+        messageInput.disabled = isLoading;
+        typingRow.classList.toggle('active', isLoading);
+        sendBtn.textContent = isLoading ? 'Thinking...' : 'Send Message';
+    }
+
+    promptChips.forEach(chip => {
+        chip.addEventListener('click', function () {
+            messageInput.value = this.dataset.prompt;
+            messageInput.focus();
+        });
+    });
+
+    chatForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        appendMessage('user', message);
+        messageInput.value = '';
+        setLoading(true);
+
+        fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ message: message })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.response) {
+                appendMessage('assistant', data.response);
+            } else if (data.error) {
+                appendMessage('assistant', `Error: ${data.error}`);
+            } else {
+                appendMessage('assistant', 'No response was returned by the system.');
+            }
+        })
+        .catch(error => {
+            appendMessage('assistant', `Something went wrong while contacting the server: ${error}`);
+        })
+        .finally(() => {
+            setLoading(false);
+            messageInput.focus();
+        });
+    });
+
+    clearBtn.addEventListener('click', function () {
+        fetch('/clear')
+            .then(() => {
+                chatHistory.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Chat cleared.</h3>
+                        <p>
+                            Start a fresh conversation with the agent. Try <strong>What is Flask?</strong> or
+                            <strong>lookup python</strong>.
+                        </p>
+                    </div>
+                `;
+            })
+            .catch(() => {
+                appendMessage('assistant', 'Could not clear the chat right now.');
+            });
+    });
+</script>
+{% endblock %}
